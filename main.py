@@ -49,23 +49,34 @@ async def bot_handle(event):
             await event.respond("Please check the message format [Link not found]")
         else :
             await client2.start(phone, password)
-            updates = await client2(JoinChannelRequest(link[loc+5:]))
-            await client2.disconnect()
-            print(updates.chats[0].id)
-            userDict={"user": chatId, "chat": updates.chats[0].id}
-            insert= usersToGroups.insert_one(userDict)
-            await event.respond("Successfully updated list")
+            try:
+                updates = await client2(JoinChannelRequest(link[loc+5:]))
+                await client2.disconnect()
+                print(updates.chats[0].id)
+                userDict={"user": chatId, "chat": updates.chats[0].id}
+                check=usersToGroups.find(userDict)
+                try:
+                    check[0]
+                except: 
+                    insert= usersToGroups.insert_one(userDict)
+                await event.respond("Successfully updated list")
+            except:
+                await event.respond("Please check the message format [Link Error]")
+            
+    if (message.message == "/start"):
+        await event.respond("Welcome to Modzy Manager Telegram Assistant.\nGet all the messages you receive on your chats summarized here at one place \nTo subscribe to a public channel copy the Link to the channel and send it with /subcribe command followed by the link\n \n for example \n /subscribe t.me/Modzybot")
 
 
 
 @client.on(events.NewMessage(incoming=True))
 async def handle_new_message(event):
     message= event.message
-    chatId=event.chat_id
-    query={"chat": chatId}
+    chatId=str(event.chat_id)
+    query={"chat": int(chatId[3:])}
+    print(chatId)
     users= usersToGroups.find(query)
-    if users:
-        print(users)
+    if users[0]:
+    
         is_link=False
         is_doc= False
         is_doc= False
@@ -84,12 +95,13 @@ async def handle_new_message(event):
                 if type(entity) is types.MessageEntityUrl:
                     is_link=True
                     #links=links+eve.message[entity.offset:entity.offset+entity.length]+"\n"
-                    links.append(event.message[entity.offset:entity.offset+entity.length])
+                    links.append(event.message.message[entity.offset:entity.offset+entity.length])
                 elif type(entity) is types.MessageEntityTextUrl:
                     is_link=True
                     links.append(entity.url)
         except:
             is_link=False
+        
         if len(message.message)>50:
             modzyClient = ApiClient(base_url=BASE_URL, api_key=API_KEY)
             model = modzyClient.models.get("rs2qqwbjwb")
@@ -105,28 +117,29 @@ async def handle_new_message(event):
                 summary= "Error getting modzy result"
         else:
             summary= "Same as original: "+message.message
-        groupName= await client.get_entity(chatId)
+        groupName= await client.get_entity(int(chatId))
         
-        Template= "Hello, \n We received a message on "+ groupName.title 
+        Template= "Hello, \nWe received a message on "+ groupName.title 
         if is_photo:
-            Template+= "\n Which contains an image and caption with summary as follows \n "     
+            Template+= "\n\nWhich contains an image and caption with summary as follows \n "     
             
         elif is_pdf:
-            Template+= "\n Which contains an pdf and caption with summary as follows \n "     
+            Template+= "\n\nWhich contains an pdf and caption with summary as follows \n "     
         elif is_doc:
-            Template+= "\n Which contains an document and caption with summary as follows \n "     
+            Template+= "\n\nWhich contains an document and caption with summary as follows \n "     
         else: 
-            Template+= "\n Which contains message with summary as follows\n"
+            Template+= "\n\nWhich contains message with summary as follows\n"
 
         Template+= summary
 
         if is_link:
-            Template+="\nWe found following links in the message\n"
+            Template+="\n\nWe found following links in the message\n"
             for i in links:
                 Template+=i +"\n"
         print(Template)
         for user in users:
-            data= {'chat_id':user.user,'text':Template}
+            
+            data= {'chat_id':user['user'],'text':Template}
             res= requests.post("https://api.telegram.org/bot"+bot_apikey+"/sendMessage",data=data)
             print(res)
     #from1 = await client.get_entity("t.me/linemeup")
